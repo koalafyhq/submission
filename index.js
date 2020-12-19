@@ -52,7 +52,7 @@ function sendEmail(payload) {
     </div>`
 
   client.sendEmail({
-    From: 'hi@koalafyhq.com',
+    From: 'submission@koalafy.dev',
     To: 'hi@koalafyhq.com',
     Subject: 'New partnership submission!',
     HtmlBody: emailTemplate,

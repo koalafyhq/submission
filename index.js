@@ -1,7 +1,7 @@
-const url = require('url')
-const https = require('https')
 const express = require('express')
 const morgan = require('morgan')
+
+const postmark = require('postmark')
 
 const { check, validationResult } = require('express-validator')
 
@@ -11,7 +11,9 @@ app.use(express.json())
 app.use(morgan('combined'))
 
 const port = process.env.PORT || 8080
-const slackWebhook = url.parse(process.env.SLACK_WEBHOOK_URI, true)
+
+const postmarkToken = process.env.POSTMARK_TOKEN
+const client = new postmark.ServerClient(postmarkToken)
 
 const validate = [
   check('madu').isEmpty(),
@@ -29,71 +31,33 @@ const validate = [
     .isLength({ max: 300 }),
   check('notes')
     .notEmpty()
-    .isLength({ max: 1024 })
+    .isLength({ max: 1024 }),
 ]
 
 function boot() {
   console.log(`Server is running on http://localhost:${port}`)
 }
 
-function sendToSlack(payload) {
+function sendEmail(payload) {
   const { name, company, email, referrer, notes } = payload
 
-  const opts = {
-    method: 'POST',
-    hostname: slackWebhook.hostname,
-    path: slackWebhook.path,
-    port: 443
-  }
+  const emailTemplate = `
+    <div>
+      <p><strong>Name:</strong> ${name}</p>
+      <p><strong>Company:</strong> ${company}</p>
+      <p><strong>Email:</strong> ${email}</p>
+      <p><strong>Referrer:</strong> ${referrer}</p>
+      <p><strong>Notes:</strong></p>
+      <div>${notes}</div>
+    </div>`
 
-  const data = {
-    blocks: [
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: 'New partnership submission:'
-        }
-      },
-      {
-        type: 'section',
-        fields: [
-          {
-            type: 'mrkdwn',
-            text: `*Name:* ${name}`
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Company:* ${company}`
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Email:* ${email}`
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Referrer:* ${referrer}`
-          }
-        ]
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'plain_text',
-          text: notes
-        }
-      }
-    ]
-  }
-
-  const req = https.request(opts)
-
-  req.on('error', err => {
-    throw err
+  client.sendEmail({
+    From: 'hi@koalafyhq.com',
+    To: 'hi@koalafyhq.com',
+    Subject: 'New partnership submission!',
+    HtmlBody: emailTemplate,
+    TextBody: 'Hello!',
   })
-
-  req.write(JSON.stringify(data))
-  req.end()
 }
 
 app.post('/', validate, (req, res) => {
@@ -104,7 +68,7 @@ app.post('/', validate, (req, res) => {
   }
 
   try {
-    sendToSlack(req.body)
+    sendEmail(req.body)
   } catch (err) {
     return res.status(500).json({ errors: err.toString() })
   }
